@@ -1,0 +1,95 @@
+Operations
+
+R-type                    op  reg func
+                          000 xxx 000
+lsl - log shift left      000 xxx 001
+lsr - log shift right     000 xxx 010
+and - bit and             000 xxx 011
+or  - bit or              000 xxx 100
+sub - subtract            000 xxx 101
+seq - set equal           000 xxx 110
+slt - set less than       000 xxx 111
+
+Mem-type/unary            op  imm func
+                              /reg
+setdes - set write reg    001 xxx 000
+setsrc - set source reg   001 xxx 001
+not - bit not             001 xxx 010 
+ldw - load word           001 xxx 011
+stw - store word          001 xxx 100
+done- done                001 xxx 101 sets done flag, imm is don't care
+
+I-type                    op  reg imm
+                              /imm
+mov - move imm            010 111 xxx always into r7
+movl- move value from LUT 011 111 xxx always into r7
+beq - branch on equal     100 xxx xxx branches to value in LUT
+blt - branch less than    101 xxx xxx
+b   - branch              110 xxx xxx branches to value in LUT
+
+LUT (float2int):
+  #0 -> 0x1f
+  #1 -> 8
+  #2 -> 25
+  #3 -> 0xff
+  #4 -> 64
+  #5 -> 65
+  #6 -> 66
+  #7 -> 67
+
+LUT (int2float):
+  #0 -> 1
+  #1 -> 2
+  #2 -> 15
+  #3 -> 0xff
+  #4 -> 0x7f
+  #5 -> 10
+  #6 -> 6
+  #7 -> 5
+
+Branch LUT (float2int):
+000000 -  3 - blt else1
+000001 - 71 - b done
+000010 - 18 - blt else2
+000011 - 115- b ifsign
+000100 - 35 - blt else3
+000101 - 31 - b ifrounding
+000110 - 89 - b done
+000111 - 31 - beq ifsign
+001000 - 17 - beq ifsign
+001001 -  5 - beq ifoverf
+001010 -  8 - b ifsign
+001011 - 14 - beq done
+001100 -  2 - beq else4
+001101 -  5 - b done
+
+Branch LUT (int2float):
+000000 - 32  - beq getexp
+000001 -  6  - beq checkoverf
+000010 - 19  - b getexp
+000011 -  8  - beq overflow
+000100 -  8  - b getexp
+000101 - 69  - b done
+000110 - 34  - beq else1
+000111 - 16  - beq body
+001000 - 97  - b expfound
+001001 - -32 - b while
+001010 - 34  - beq else2
+001011 - 13  - beq body2
+001100 - 61  - b expfound
+001101 - 59  - b done
+001110 - -28 - b while2
+001111 - 41  - beq zero
+010000 - 59  - b done
+010001 - 52  - b done
+010010 - 55  - blt largeexp
+010011 - 56  - b done
+
+Registers:
+  $r0-$r7 general purpose reg
+  $s0 overflow flag
+  $s1 done flag
+  $s2 negative flag for compare
+  $s3 equal flag for compare
+
+

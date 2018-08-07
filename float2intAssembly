@@ -1,0 +1,248 @@
+
+
+float2Int:
+  setdes $r0    @ set r0 to write
+  ldw #4        @ Load upper byte to reg 0
+  setdes $r1    @ set r1 to write
+  ldw #5        @ Load lower byte to reg 1
+
+  @store sign bit in r2
+  mov #7        @ move 7 to r7 
+  setdes $r2    @ set $r2 to write reg
+  setsrc $r0    @ set r0 as source reg  
+  lsr $r7       @ r2 = r0 >> 7
+  mov #1        @ move 1 to r7
+  setsrc $r2    @ set r2 as source
+  and $r7       @ r2=r2&1 (sign bit)
+  
+  @store exponent in r3
+  setdes $r3    @ set r3 to write reg
+  setsrc $r0    @ set r0 as source
+  lsr $r7       @ r3 = r0 >> 1
+  setsrc $r3    @ set r3 as source
+  lsr $r7       @ r3 = r3 >> 1
+  movl #0       @ r7 = 0x1f 
+  and $r7       @ r3 = r3&r7 to isolate exponent
+  movl #2       @ move 25 from LUT to r7
+  sub $r7       @ r3 = r3-25, gives amount to shift mantissa for int
+  
+  @build top byte of mantissa in r4
+  mov #1        @ move 1 to reg 7
+  setdes $r4    @ set r4 to write reg
+  setsrc $r7    @ set source to r7
+  lsl $r7       @ r4 = r7 << 1
+  setsrc $r4    @ set source to r4
+  lsl $r7       @ r4 = r4 << 1
+  setdes $r5    @ set r5 to hold temp value
+  setsrc $r0    @ set source to r0
+  mov #3        @ move 3 to r7
+  and $r7       @ r5 = r0 & 3
+  setdes $r4    @ set r4 as write
+  setsrc $r5    @ set r5 as source
+  or $r4        @ r4 = r4 | r5
+ 
+  @store lower byte of mantissa into r5
+  setdes $r5    @ set r5 as write
+  setsrc $r1    @ set r1 as source
+  mov #0        @ move 0 to r7
+  sub r7        @ r5 = r1 - 0 = r1
+  
+  @set overflow to $s1 if exp >=5
+  setsrc $r3    @ set r3 to source
+  mov #5        @ move 5 to r7
+  slt $r7       @ set flag if r3 < r7
+  blt #000000   @ branch to tag1 on less than flag
+  mov #0        @ move 0 to r7
+  setsrc $r7    @ set r7 as source
+  setdes $r4    @ set r4 to write
+  sub $r7       @ r4 = 0-0
+  setdes $r5    @ set r5 to write
+  sub $r7       @ r5 = 0-0
+  b #000001     @ branch to done
+  
+  @left shift on non-negative exponent
+else1:
+  mov #0        @ move 0 to r7
+  slt $r7       @ set flag if r3 < r7
+  blt #000010   @ branch to else2 on less than flag
+  setsrc $r4    @ set source to r4
+  setdes $r4    @ set r4 to write
+  lsl $r3       @ r4 = r4 << r3
+  movl #1       @ move 8 (from LUT) to r7
+  setsrc $r7    @ set r7 as source
+  setdes $r7    @ set r7 to write
+  sub $r3       @ r7 = r7 - r3
+  setdes $r6    @ set r6 to write
+  setsrc $r5    @ set r5 as source
+  lsr $r7       @ r6 = r5 >> r7
+  setsrc $r6    @ set r6 as source
+  setdes $r4    @ set r4 as write
+  or $r4        @ r4 = r6 | r4
+  setdes $r5    @ set r5 to write
+  setsrc $r5    @ set r5 to source
+  lsl $r3       @ r5 = r5 << r3
+  b #000011     @ branch to ifsign
+
+  @ right shift on negative exponent
+else2:
+  @negate exponent
+  mov #0        @ move 0 to r7
+  setdes $r3    @ set r3 to write
+  setsrc $r7    @ set r7 to source
+  sub $r3       @ r3 = r7 - r3 (negation)
+  
+  @get ejected lower bits
+  mov #1        @ move 1 to r7
+  setdes $r6    @ set r6 to write (stores ejected lower bits)
+  lsl $r3       @ r6 = 1 << exponent
+  setsrc $r6    @ set r6 to source
+  sub $r7       @ r6 = r6 - 1
+  and $r5       @ get ejected lower bits
+
+  @if exp greater than 8
+  setdes $r1    @ set r1 to write (Stores sticky)
+  mov #0        @ move 0 to r7
+  sub $r7       @ r1 = r6 - 0
+  movl #1       @ move 8 from lut to r7
+  setsrc $r3    @ set r3 as source
+  slt $r7       @ set flag if r3 < r7
+  blt #000100   @ branch to else3 on less than flag
+  sub $r7       @ exponent -= 8
+  mov #0        @ move 0 to r7
+  setdes $r5    @ set r5 to write
+  setsrc $r4    @ set r4 to source
+  sub $7        @ r5 = r4 - 0 (mantissaLower = mantissaUpper)
+  setdes $r0    @ set r0 to write (rounding bit)
+  mov #1        @ move 1 to r7
+  subsrc $r3    @ set r3 as source
+  sub $r7       @ r0 = r3 - 1 mask
+  setsrc $r7    @ set r7 to source
+  lsl $r0       @ r0 = 1 << r0 
+  setdes $r4    @ set r4 to write (stores ejectedUpper)
+  setsrc $r0    @ set r0 to source
+  mov #0        @ move 0 to r7
+  sub $r7       @ r4 = r0 - 0
+  mov #1        @ move 1 to r7
+  setdes $r0    @ set r0 to write 
+  and $r5       @ r0 = r0 & r5
+  setdes $r4    @ set r4 to write
+  setsrc $r4    @ set r4 to source
+  sub $r7       @ r4 = r4 - 1
+  and $r5       @ r4 = r4 & r5
+  setdes $r5    @ set r5 as write
+  setsrc $r5    @ set r5 as source
+  lsr $r3       @ r5 = r5 >> r3
+  mov #0        @ move 0 to r7
+  setsrc $r4    @ set r4 as source
+  setdes $r3    @ set r3 to write (stores ejectedUpper)
+  sub $r7       @ r3 = r4 - 0
+  setdes $r4    @ set r4 to write
+  setsrc $r7    @ set r7 as source
+  sub $r7       @ r4 = 0 - 0 (intUpper = 0)
+  b #000101     @ branch to ifrounding tag
+  b #000110     @ branch to done
+
+else3:
+  setsrc $r3    @ set r3 as source
+  setdes $r0    @ set r0 as write (rounding bit)
+  mov #1        @ move 1 to r7
+  sub $r7       @ r0 = r3 -1
+  setsrc $r7    @ set r7 as source
+  lsl $r0       @ r0 = r7 << r0
+  setsrc $r0    @ set r0 to source
+  setdes $r1    @ set r1 to write (stores sticky)
+  sub $r7       @ r1 = r0 - 1
+  setsrc $r1    @ set r1 as source
+  and $r5       @ r1 = r1 & r5
+  setsrc $r0    @ set r0 as source
+  setdes $r0    @ set r0 as write
+  and $r5       @ r0 = r0 & r5
+  setdes $r6    @ set r6 to write (ejected upper)
+  setsrc $r7    @ set r3 as source
+  lsl $r3       @ r6 = 1 << exponent
+  setsrc $r6    @ set r6 as source
+  sub $r7       @ r6 = r6 - 1
+  and $r4       @ r6 = r6 & r4 
+  movl #1       @ move 8 from lut to r7
+  setsrc $r7    @ set r7 as source
+  setdes $r7    @ set r7 to write
+  sub $r3       @ r7 = 8 - r3
+  setdes $r6    @ set r6 to write
+  setsrc $r6    @ set r6 as source
+  lsl $r7       @ r6 = r6 << r7
+  setdes $r4    @ set r4 to write (int upper)
+  setsrc $r4    @ set r4 as source
+  lsr $r3       @ r4 = r4 >> r3
+  setdes $r5    @ set r5 to write (int lower)
+  setsrc $r5    @ set r5 as source
+  lsr $r3       @ r5 = r5 >> r3
+  or $r6        @ r5 = r5 | r6
+  setdes $r6    @ set r6 to write (clear r6)
+  mov #0        @ move 0 to r7
+  setsrc $r7    @ set r7 as source
+  sub $r7       @ r6 = 0 - 0
+  
+  @ check for rounding
+ifrounding:
+  setsrc $r7    @ set r7 as source
+  mov #0        @ move 0 to r7
+  seq $r0       @ set flag if r7 = r0 (if rounding bit)
+  beq #000111   @ branch to ifsign on less than flag
+  setsrc $6     @ set r6 as source
+  setdes $r1    @ set r1 to write
+  or $r1        @ r1 = r6 | r1
+  setdes $r6    @ set r6 to write
+  mov #1        @ move 1 to r7
+  setsrc $r5    @ set r5 as source
+  and $r7       @ r6 = r5 & 1
+  setsrc $r6    @ set r6 as source
+  setdes $r1    @ set r1 to write
+  or $r1        @ r1 = r6 | r1
+  setsrc $r7    @ set r7 as source
+  mov #0        @ move 0 to r7
+  seq $1        @ set flag if 0 = r1 (if sticky)
+  beq #001000   @ branch to ifsign if no rounding required
+  movl #3       @ move -1 into r7
+  setsrc $r5    @ set r5 as source
+  seq $r7       @ set flag if r5 = r7 (if overflow)
+  beq #001001   @ branch to ifoverf if lower byte will overflow
+  mov #1        @ move 1 to r7
+  setdes $r5    @ set r5 to write
+  add $r7       @ r5 = r5 + 1
+  b #001010     @ branch to ifsign
+ifoverf: 
+  mov #1        @ move 1 to r7
+  setdes $r4    @ set r4 to write
+  setsrc $r4    @ set r4 as source
+  add $r7       @ r4 = r4 + 1
+  setdes $r5    @ set r5 to write
+  setsrc $r5    @ set r5 as source
+  add $r7       @ r5 = r5 + 1
+
+ifsign: 
+  setsrc $r2    @ set r2 as source
+  mov #0        @ move 0 to r7
+  seq $r7       @ set flag if r2 = r7
+  beq #001011   @ branch to done if sign bit is 0
+  setsrc $r7    @ set r7 as source
+  setdes $r5    @ set r6 to write
+  sub $r5       @ r5 = 0 - r5
+  setdes $r4    @ set r4 to write
+  sub $r4       @ r4 = 0 - r4
+  setsrc $r5    @ set r5 as source
+  seq $r7       @ set flag if r5 = r0 (overflow in lower)
+  beq #001100   @ branch to else4 if r5 = 0
+  b #001101     @ branch to done
+
+else4: 
+  movl #3       @ move -1 to r7
+  setdes $r4    @ set r4 to write
+  setsrc $r4    @ set r4 as source
+  sub $r7       @ r4 = r4 -(-1)
+
+done:
+  setsrc $r4    @ set r4 as source
+  stw #6        @ store r4 at mem loc 64
+  setsrc $r5    @ set r5 as source
+  stw #7        @ store r5 at mem loc 65
+  done
